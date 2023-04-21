@@ -1,6 +1,10 @@
 import tkinter
 import tkinter.messagebox
 import customtkinter
+from tkinter import filedialog
+import numpy as np
+import cv2
+from PIL import Image, ImageTk
 
 customtkinter.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
 customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
@@ -64,11 +68,15 @@ class App(customtkinter.CTk):
                                                                command=self.change_scaling_event)
         self.scaling_optionemenu.grid(row=8, column=0, padx=20, pady=(10, 20))
 
+
+#Picture  mat creation
+        self.picture_mat= customtkinter.CTkLabel(self, text=" ", anchor="w")
+        self.picture_mat.grid(row=1, column=1, padx=20, pady=(10, 0))
         
         # set default values
         self.upload_picture_btn.configure(text="Upload Picture")
         self.take_picture_btn.configure(state="disabled", text="Take picture")
-        self.camera_btn.configure(state="disabled", text="Camera")
+        self.camera_btn.configure(text="Camera")
         self.appearance_mode_optionemenu.set("System")
         self.scaling_optionemenu.set("100%")
 
@@ -88,12 +96,41 @@ class App(customtkinter.CTk):
 
     def upload_picture_btn_event(self):
         print("upload_button click")
+        filename = filedialog.askopenfilename(initialdir="/Pictures", title="Select a File", filetypes=(
+        ("jpeg files", "*.jpeg"), ("png files", "*.png"), ("All Files", "*.*")))
+        my_image = customtkinter.CTkImage(light_image=Image.open(filename),
+                                          dark_image=Image.open(filename),
+                                          size=(500, 500))
+        self.picture_mat.configure(image=my_image)
 
     def take_picture_btn_event(self):
         print("picture_button click")
 
     def camera_btn_event(self):
         print("camera_button click")
+        self.Camera_capture()
+
+
+    def Camera_capture(self):
+            cap = cv2.VideoCapture(0)
+            if not cap.isOpened():
+                print("Cannot open camera")
+                #exit()
+            while True:
+                # Capture frame-by-frame
+                ret, frame = cap.read()
+                # if frame is read correctly ret is True
+                if not ret:
+                    print("Can't receive frame (stream end?). Exiting ...")
+                    break
+                # Our operations on the frame come here
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                # Display the resulting frame
+                cv2.imshow('frame', gray)
+                if cv2.waitKey(1) == ord('q'):
+                    break
+
+
         
 if __name__ == "__main__":
     app = App()
