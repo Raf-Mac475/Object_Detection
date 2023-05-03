@@ -28,3 +28,12 @@ pip install -r requirements.txt
 ```bash
 python ./Object_Detection.py
 ```
+
+# How to import models
+
+### I dont like LFS and github dont allows to keep files larger than 100MB without LFS - so lets keep them in a drive for a while. (maybe DVC in future)
+Models to download:
+```path
+https://drive.google.com/drive/folders/1l6zO97RzdFzpmA0AwmTASTQ0psuBPP78?usp=share_link
+```
+After download you need to put them to `./models` directory. Sorry for nasty solutions. We will try to make it better in the future.
