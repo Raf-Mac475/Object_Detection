@@ -1,4 +1,5 @@
 from abc import abstractmethod
+import os
 
 from PIL import Image
 import torch
@@ -22,6 +23,10 @@ class generic_segmenter:
 
 
 class dummy_segmenter(generic_segmenter):
+    """Dummy segmenter.
+    
+    It is a simple example what your segmenter need to work.
+    """
     def __init__(self, path_to_model: str) -> None:
         """Method to read model from file"""
         print(f'Reading model from {path_to_model}')
@@ -72,8 +77,8 @@ class DeepLabV3_segmenter(generic_segmenter):
         return r
 
 
-def get_segmenter(segmenter_name: str) -> generic_segmenter:
-    """Metrod for create segmenter (pseudo fabric).
+def get_segmenter(segmenter_name: str, model_path: str) -> generic_segmenter:
+    """Method for create segmenter (pseudo fabric).
     
     Ready segmenters are:
     - DUMMY_SEGMENTER
@@ -81,12 +86,18 @@ def get_segmenter(segmenter_name: str) -> generic_segmenter:
     WIP:
     - YoloV7
     """
+
+    print(segmenter_name, model_path)
+    
     if segmenter_name == 'DUMMY_SEGMENTER':
         return dummy_segmenter(r'C:\system32\rule34.pt')
     elif segmenter_name == 'YoloV7':
         print('NOT YET IMPLEMENTED, USING DUMMY_SEGMENTER (YES IT DOES NOTHING RIGHT NOW.)')
         return dummy_segmenter(r'C:\system32\rule34.pt')
     elif segmenter_name == 'DeepLabV3':
-        return DeepLabV3_segmenter(r'./models/DeepLabV3.pt')
+        if os.path.isfile(model_path) and model_path.split('.')[-1] in ['pt', 'pth']:
+            return DeepLabV3_segmenter(model_path)
+        else:
+            raise RuntimeError(f'Path {model_path} doesnt exist :/. Did you download models? Did you even read README.md bi$ch?')
     else:
-        return RuntimeError(f'Model {segmenter_name} is not supported.')
+        raise RuntimeError(f'Model {segmenter_name} is not supported.')
