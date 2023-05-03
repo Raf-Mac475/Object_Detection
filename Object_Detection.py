@@ -1,10 +1,9 @@
-import tkinter
-import tkinter.messagebox
 import customtkinter
-from tkinter import filedialog
-import numpy as np
 import cv2
-from PIL import Image, ImageTk
+from PIL import Image
+from tkinter import filedialog
+
+from generic_segmenter import *
 
 customtkinter.set_appearance_mode("System")  # Modes: "System" (standard), "Dark", "Light"
 customtkinter.set_default_color_theme("blue")  # Themes: "blue" (standard), "green", "dark-blue"
@@ -23,7 +22,7 @@ class App(customtkinter.CTk):
         # self.grid_columnconfigure((2, 3), weight=0)
         self.grid_rowconfigure((0, 1, 2), weight=1)
 
-# create sidebar frame with widgets
+        # create sidebar frame with widgets
         self.sidebar_frame = customtkinter.CTkFrame(self, width=140, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, rowspan=4, sticky="nsew")
         self.sidebar_frame.grid_rowconfigure(4, weight=0)
@@ -50,10 +49,12 @@ class App(customtkinter.CTk):
 
         #Model choosing option menu
         self.model_optionmenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
-                                                                       values=["Yolov7", "DeepLabV3"],
+                                                                       values=["DeepLabV3", "YoloV7"],
                                                                        command=self.change_model_event)
         self.model_optionmenu.grid(row=5, column=0, padx=20, pady=(10, 10))
-
+        print(self.model_optionmenu.get())
+        self.segmenter = get_segmenter(self.model_optionmenu.get())
+        
         #Appearance and UI Label
         self.appearance_mode_label = customtkinter.CTkLabel(self.sidebar_frame, text="Appearance Mode and UI Scaling:", anchor="w")
         self.appearance_mode_label.grid(row=6, column=0, padx=20, pady=(150, 0))
@@ -69,7 +70,7 @@ class App(customtkinter.CTk):
         self.scaling_optionemenu.grid(row=8, column=0, padx=20, pady=(10, 20))
 
 
-#Picture  mat creation
+        #Picture  mat creation
         self.picture_mat= customtkinter.CTkLabel(self, text=" ", anchor="w")
         self.picture_mat.grid(row=1, column=1, padx=20, pady=(10, 0))
         
