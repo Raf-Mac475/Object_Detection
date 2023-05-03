@@ -55,7 +55,7 @@ class DeepLabV3_segmenter(generic_segmenter):
         print(self.model)
     
     def segment(self, image: Image) -> Image:
-        input_image = image.convert("RGB")
+        input_image = image.convert('RGB')
         preprocess = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -71,7 +71,7 @@ class DeepLabV3_segmenter(generic_segmenter):
 
         palette = torch.tensor([2 ** 25 - 1, 2 ** 15 - 1, 2 ** 21 - 1])
         colors = torch.as_tensor([i for i in range(21)])[:, None] * palette
-        colors = (colors % 255).numpy().astype("uint8")
+        colors = (colors % 255).numpy().astype('uint8')
         r = Image.fromarray(output_predictions.byte().cpu().numpy()).resize(input_image.size)
         r.putpalette(colors)
         return r
