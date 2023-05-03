@@ -1,6 +1,7 @@
 import customtkinter
 import cv2
 from PIL import Image
+from threading import Thread
 from tkinter import filedialog
 
 from generic_segmenter import *
@@ -127,7 +128,7 @@ class App(customtkinter.CTk):
                                                size=(500, 500))
         self.picture_mat.configure(image=self.my_image)
 
-        self.segment_btn.configure(text='Segment', state='enabled')
+        self.segment_btn.configure(state="normal")
 
 
     def take_picture_btn_event(self):
@@ -137,15 +138,28 @@ class App(customtkinter.CTk):
         print('camera_button click')
         self.Camera_capture()
     
+    # TODO(jakubg): remember to block all functionalities that shouldn't be changed during segmentation.
+    def block_segment_btn(self):
+        self.segment_btn.configure(state="disabled")
+
+    def unlock_segment_btn(self):
+        self.segment_btn.configure(state="normal")
+
+    def do_segmentation(self):
+        self.my_image = customtkinter.CTkImage(light_image=self.segmenter.segment(self.my_image._light_image),
+                                               size=(500, 500))
+        self.picture_mat.configure(image=self.my_image)
+
+        self.unlock_segment_btn()
+        print('Ended')
+
     def segment_magic(self):
         print('segment_magic click')
         if self.segment_btn._state != 'disabled':
+            self.block_segment_btn()
             print('Started')
-            self.my_image = customtkinter.CTkImage(light_image=self.segmenter.segment(self.my_image._light_image),
-                                                   size=(500, 500))
-            self.picture_mat.configure(image=self.my_image)
-
-            print('Ended')
+            thread = Thread(target=self.do_segmentation)
+            thread.start()
 
         else:
             print('Button is disabled activate it adding image :/ - or program it to do more!')
