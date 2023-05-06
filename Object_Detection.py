@@ -20,7 +20,6 @@ class App(customtkinter.CTk):
 
         # configure grid layout (4x4)
         self.grid_columnconfigure(1, weight=1)
-        # self.grid_columnconfigure((2, 3), weight=0)
         self.grid_rowconfigure((0, 1, 2), weight=1)
 
 # create sidebar frame with widgets
@@ -70,19 +69,17 @@ class App(customtkinter.CTk):
 
 
 #Picture  mat creation
-        self.picture_mat= customtkinter.CTkLabel(self, text=" ", anchor="w")
-        self.picture_mat.grid(row=1, column=1, padx=20, pady=(10, 0))
-        
+        self.picture_mat= customtkinter.CTkLabel(self, text=" ")
+        self.picture_mat.grid(row=1, column=1)
+# Adding functionality to zoom in and out
+        self.picture_mat.bind("<MouseWheel>", self.zoom_image)
+
         # set default values
         self.upload_picture_btn.configure(text="Upload Picture")
-        self.take_picture_btn.configure(state="disabled", text="Take picture")
+        self.take_picture_btn.configure(text="Take picture")
         self.camera_btn.configure(text="Camera")
         self.appearance_mode_optionemenu.set("System")
         self.scaling_optionemenu.set("100%")
-
-    def open_input_dialog_event(self):
-        dialog = customtkinter.CTkInputDialog(text="Type in a number:", title="CTkInputDialog")
-        print("CTkInputDialog:", dialog.get_input())
 
     def change_appearance_mode_event(self, new_appearance_mode: str):
         customtkinter.set_appearance_mode(new_appearance_mode)
@@ -90,21 +87,18 @@ class App(customtkinter.CTk):
     def change_model_event(self, new_model):
         print(new_model)
 
+
     def change_scaling_event(self, new_scaling: str):
         new_scaling_float = int(new_scaling.replace("%", "")) / 100
         customtkinter.set_widget_scaling(new_scaling_float)
 
     def upload_picture_btn_event(self):
         print("upload_button click")
-        filename = filedialog.askopenfilename(initialdir="/Pictures", title="Select a File", filetypes=(
-        ("jpeg files", "*.jpeg"), ("png files", "*.png"), ("All Files", "*.*")))
-        my_image = customtkinter.CTkImage(light_image=Image.open(filename),
-                                          dark_image=Image.open(filename),
-                                          size=(500, 500))
-        self.picture_mat.configure(image=my_image)
+        self.upload_picture()
 
     def take_picture_btn_event(self):
         print("picture_button click")
+        self.Camera_photo()
 
     def camera_btn_event(self):
         print("camera_button click")
@@ -129,6 +123,52 @@ class App(customtkinter.CTk):
                 cv2.imshow('frame', gray)
                 if cv2.waitKey(1) == ord('q'):
                     break
+
+    def Camera_photo(self):
+        cap = cv2.VideoCapture(0)
+        if not cap.isOpened():
+            print("Cannot open camera")
+        while True:
+            # reading the input using the camera
+            result, image = cap.read()
+            # If image will detected without any error,
+            # show result
+            if not result:
+                print("Can't receive frame (stream end?). Exiting ...")
+                break
+            if result:
+                # saving image in local storage
+                cv2.imwrite("result.jpg", image)
+
+                # output
+                img = Image.open("result.jpg")
+                my_image = customtkinter.CTkImage(light_image=img, size=(img.width,img.height))
+                self.picture_mat.configure(image=my_image)
+
+    # Zoom In function
+    def zoom_image(self, event):
+        img = Image.open('result.jpg')
+        delta = event.delta
+        factor = 1.1 if delta > 0 else 0.9
+        current_width = self.picture_mat.winfo_width()
+        current_height = self.picture_mat.winfo_height()
+        new_width = int(current_width * factor)
+        new_height = int(current_height * factor)
+        show_image = customtkinter.CTkImage(light_image=img, size=(new_width,new_height))
+        self.picture_mat.configure(image=show_image)
+        self.picture_mat.focus_set()
+
+    def upload_picture(self):
+        try:
+            filename = filedialog.askopenfilename(initialdir="/Pictures", title="Select a File", filetypes=(("All Files", "*.*"),
+            ("jpeg files", "*.jpeg"), ("png files", "*.png") ))
+            img = Image.open(filename)
+            img.save('result.jpg', "JPEG")
+            show_image = customtkinter.CTkImage(light_image=img, size=(img.width,img.height))
+            self.picture_mat.configure(image=show_image)
+            self.picture_mat.focus_set()
+        except:
+            print("No file chosen")
 
 
         
