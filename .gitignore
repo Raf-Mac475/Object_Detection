@@ -55,7 +55,7 @@ coverage.xml
 cover/
 
 # Models
-models/
+ml_models/
 
 # Translations
 *.mo

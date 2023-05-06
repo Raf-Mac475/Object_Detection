@@ -36,4 +36,4 @@ Models to download:
 ```path
 https://drive.google.com/drive/folders/1l6zO97RzdFzpmA0AwmTASTQ0psuBPP78?usp=share_link
 ```
-After download you need to put them to `./models` directory. Sorry for nasty solutions. We will try to make it better in the future.
+After download you need to put them to `./ml_models` directory. Sorry for nasty solutions. We will try to make it better in the future.

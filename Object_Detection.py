@@ -67,7 +67,7 @@ class App(customtkinter.CTk):
                                                                        command=self.change_model_event)
         self.model_optionmenu.grid(row=self.iterator.next(), column=0, padx=20, pady=(10, 10))
         print(self.model_optionmenu.get())
-        self.segmenter = get_segmenter(self.model_optionmenu.get(), './models/DeepLabV3.pt')
+        self.segmenter = get_segmenter(self.model_optionmenu.get(), './ml_models/DeepLabV3.pt')
 
         #Segment Button
         self.segment_btn = customtkinter.CTkButton(self.sidebar_frame, command=self.segment_magic)
@@ -110,9 +110,9 @@ class App(customtkinter.CTk):
     def change_model_event(self, new_model):
         print(new_model)
         if new_model == 'DeepLabV3':
-            self.segmenter = get_segmenter(new_model, './models/DeepLabV3.pt')
+            self.segmenter = get_segmenter(new_model, './ml_models/DeepLabV3.pt')
         elif new_model == 'YoloV7':
-            self.segmenter = get_segmenter(new_model, './models/YoloV7.pt')
+            self.segmenter = get_segmenter(new_model, './ml_models/YoloV7.pt')
         else:
             raise RuntimeError('How the quack did you do that???')
 
