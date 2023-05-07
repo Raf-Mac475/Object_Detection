@@ -1,5 +1,3 @@
-import math
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -45,11 +43,6 @@ class Conv(nn.Module):
 
     def fuseforward(self, x):
         return self.act(self.conv(x))
-
-
-# def DWConv(c1, c2, k=1, s=1, act=True):
-#     # Depthwise convolution
-#     return Conv(c1, c2, k, s, g=math.gcd(c1, c2), act=act)
 
 
 ##### cspnet #####
