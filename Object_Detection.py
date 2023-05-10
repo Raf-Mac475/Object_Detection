@@ -69,10 +69,10 @@ class App(customtkinter.CTk):
 
 
 #Picture  mat creation
-        self.picture_mat= customtkinter.CTkLabel(self, text=" ")
+        self.picture_mat= customtkinter.CTkLabel(self, text=' ')
         self.picture_mat.grid(row=1, column=1)
 # Adding functionality to zoom in and out
-        self.picture_mat.bind("<MouseWheel>", self.zoom_image)
+        self.picture_mat.bind('<MouseWheel>', self.zoom_image)
 
         # set default values
         self.upload_picture_btn.configure(text="Upload Picture")
