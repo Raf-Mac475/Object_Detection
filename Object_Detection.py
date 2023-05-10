@@ -76,7 +76,7 @@ class App(customtkinter.CTk):
 
         # set default values
         self.upload_picture_btn.configure(text="Upload Picture")
-        self.take_picture_btn.configure(text="Take picture")
+        self.take_picture_btn.configure(text='Take picture')
         self.camera_btn.configure(text="Camera")
         self.appearance_mode_optionemenu.set("System")
         self.scaling_optionemenu.set("100%")
