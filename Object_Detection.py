@@ -126,49 +126,57 @@ class App(customtkinter.CTk):
     def Camera_photo(self):
         cap = cv2.VideoCapture(0)
         if not cap.isOpened():
-            print("Cannot open camera")
-        while True:
-            # reading the input using the camera
-            result, image = cap.read()
-            # If image will detected without any error,
-            # show result
-            if not result:
-                print("Can't receive frame (stream end?). Exiting ...")
-                break
-            if result:
-                # saving image in local storage
-                cv2.imwrite("result.jpg", image)
+            print('Cannot open camera')
+            return
+            
+        # reading the input using the camera
+        result, image = cap.read()
 
-                # output
-                img = Image.open("result.jpg")
-                my_image = customtkinter.CTkImage(light_image=img, size=(img.width,img.height))
-                self.picture_mat.configure(image=my_image)
+        if not result:
+            print('Can\'t receive frame (stream end?). Exiting ...')
+        else:
+            img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(img)
+            self.upload_picture(img)
 
     # Zoom In function
     def zoom_image(self, event):
-        img = Image.open('result.jpg')
+        # img = Image.open('result.jpg')
         delta = event.delta
-        factor = 1.1 if delta > 0 else 0.9
-        current_width = self.picture_mat.winfo_width()
-        current_height = self.picture_mat.winfo_height()
-        new_width = int(current_width * factor)
-        new_height = int(current_height * factor)
-        show_image = customtkinter.CTkImage(light_image=img, size=(new_width,new_height))
+        factor_dif = 0.05
+        self.factor += self.factor * factor_dif if delta > 0 else  self.factor * -factor_dif
+        new_width = int(self.img.width * self.factor)
+        new_height = int(self.img.height * self.factor)
+        show_image = customtkinter.CTkImage(light_image=self.my_image._light_image, size=(new_width, new_height))
         self.picture_mat.configure(image=show_image)
         self.picture_mat.focus_set()
 
     def upload_picture(self):
+        self.factor = 1.0
         try:
-            filename = filedialog.askopenfilename(initialdir="/Pictures", title="Select a File", filetypes=(("All Files", "*.*"),
-            ("jpeg files", "*.jpeg"), ("png files", "*.png") ))
-            img = Image.open(filename)
-            img.save('result.jpg', "JPEG")
-            show_image = customtkinter.CTkImage(light_image=img, size=(img.width,img.height))
-            self.picture_mat.configure(image=show_image)
+            filename = filedialog.askopenfilename(initialdir='/Pictures', title='Select a File', filetypes=(('All Files', '*.*'),
+            ('jpeg files', '*.jpeg'), ('png files', '*.png') ))
+            self.img = Image.open(filename)
+            self.my_image = customtkinter.CTkImage(light_image=self.img, size=(self.img.width, self.img.height))
+            self.picture_mat.configure(image=self.my_image)
             self.picture_mat.focus_set()
-        except:
-            print("No file chosen")
+            
+            self.segment_btn.configure(state='normal')
 
+        except Exception as e:
+            print(f'Error: {e}')
+
+    def upload_picture(self, image):
+        self.factor = 1.0
+        try:
+            self.img = image
+            self.my_image = customtkinter.CTkImage(light_image=self.img, size=(self.img.width, self.img.height))
+            self.picture_mat.configure(image=self.my_image)
+            self.picture_mat.focus_set()
+            self.segment_btn.configure(state='normal')
+
+        except Exception as e:
+            print(f'Error: {e}')
 
         
 if __name__ == "__main__":
