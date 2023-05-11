@@ -88,10 +88,10 @@ class App(customtkinter.CTk):
         self.scaling_optionemenu.grid(row=self.iterator.next(), column=0, padx=20, pady=(10, 20))
 
 
-#Picture  mat creation
+        # Picture  mat creation
         self.picture_mat= customtkinter.CTkLabel(self, text=' ')
         self.picture_mat.grid(row=1, column=1)
-# Adding functionality to zoom in and out
+        # Adding functionality to zoom in and out
         self.picture_mat.bind('<MouseWheel>', self.zoom_image)
 
         # set default values
