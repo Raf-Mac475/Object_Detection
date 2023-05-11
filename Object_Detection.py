@@ -34,7 +34,6 @@ class App(customtkinter.CTk):
 
         # configure grid layout (4x4)
         self.grid_columnconfigure(1, weight=1)
-        # self.grid_columnconfigure((2, 3), weight=0)
         self.grid_rowconfigure((0, 1, 2), weight=1)
 
         # create sidebar frame with widgets
@@ -89,21 +88,20 @@ class App(customtkinter.CTk):
         self.scaling_optionemenu.grid(row=self.iterator.next(), column=0, padx=20, pady=(10, 20))
 
 
-        #Picture mat creation
-        self.picture_mat= customtkinter.CTkLabel(self, text=' ', anchor='w')
-        self.picture_mat.grid(row=1, column=1, padx=20, pady=(10, 0))
-        
-        # set default values
-        self.upload_picture_btn.configure(text='Upload Picture')
-        self.take_picture_btn.configure(state='disabled', text='Take picture')
-        self.camera_btn.configure(text='Camera')
-        self.segment_btn.configure(text='Segment', state='disabled')
-        self.appearance_mode_optionemenu.set('System')
-        self.scaling_optionemenu.set('100%')
+        # Picture  mat creation
+        self.picture_mat= customtkinter.CTkLabel(self, text=' ')
+        self.picture_mat.grid(row=1, column=1)
+        # Adding functionality to zoom in and out
+        self.picture_mat.bind('<MouseWheel>', self.zoom_image)
 
-    def open_input_dialog_event(self):
-        dialog = customtkinter.CTkInputDialog(text='Type in a number:', title='CTkInputDialog')
-        print('CTkInputDialog:', dialog.get_input())
+        # set default values
+        self.upload_picture_btn.configure(text="Upload Picture")
+        self.take_picture_btn.configure(text='Take picture')
+        self.camera_btn.configure(text="Camera")
+        self.appearance_mode_optionemenu.set("System")
+        self.scaling_optionemenu.set("100%")
+        self.segment_btn.configure(text='Segment', state='disabled')
+
 
     def change_appearance_mode_event(self, new_appearance_mode: str):
         customtkinter.set_appearance_mode(new_appearance_mode)
@@ -122,18 +120,13 @@ class App(customtkinter.CTk):
         customtkinter.set_widget_scaling(new_scaling_float)
 
     def upload_picture_btn_event(self):
-        print('upload_button click')
-        filename = filedialog.askopenfilename(initialdir='/Pictures', title='Select a File', filetypes=(
-        ('jpeg files', '*.jpeg'), ('png files', '*.png'), ('All Files', '*.*')))
-        self.my_image = customtkinter.CTkImage(light_image=Image.open(filename),
-                                               size=(500, 500))
-        self.picture_mat.configure(image=self.my_image)
-
-        self.segment_btn.configure(state="normal")
-
+        print("upload_button click")
+        self.upload_picture_from_disk()
 
     def take_picture_btn_event(self):
-        print('picture_button click')
+        print("picture_button click")
+        self.Camera_photo()
+
 
     def camera_btn_event(self):
         print('camera_button click')
@@ -148,7 +141,7 @@ class App(customtkinter.CTk):
 
     def do_segmentation(self):
         self.my_image = customtkinter.CTkImage(light_image=self.segmenter.segment(self.my_image._light_image),
-                                               size=(500, 500))
+                                               size=(self.img.width, self.img.height))
         self.picture_mat.configure(image=self.my_image)
 
         self.unlock_segment_btn()
@@ -184,6 +177,55 @@ class App(customtkinter.CTk):
                 if cv2.waitKey(1) == ord('q'):
                     break
 
+    def Camera_photo(self):
+        cap = cv2.VideoCapture(0)
+        if not cap.isOpened():
+            print('Cannot open camera')
+            return
+            
+        # reading the input using the camera
+        result, image = cap.read()
+
+        if not result:
+            print('Can\'t receive frame (stream end?). Exiting ...')
+        else:
+            img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            img = Image.fromarray(img)
+            self.upload_picture(img)
+
+    # Zoom In function
+    def zoom_image(self, event):
+        # img = Image.open('result.jpg')
+        delta = event.delta
+        factor_dif = 0.05
+        self.factor += self.factor * factor_dif if delta > 0 else  self.factor * -factor_dif
+        new_width = int(self.img.width * self.factor)
+        new_height = int(self.img.height * self.factor)
+        show_image = customtkinter.CTkImage(light_image=self.my_image._light_image, size=(new_width, new_height))
+        self.picture_mat.configure(image=show_image)
+        self.picture_mat.focus_set()
+
+    def upload_picture_from_disk(self):
+        try:
+            filename = filedialog.askopenfilename(initialdir='/Pictures', title='Select a File', filetypes=(('All Files', '*.*'),
+            ('jpeg files', '*.jpeg'), ('png files', '*.png') ))
+            img = Image.open(filename)
+            self.upload_picture(img)
+
+        except Exception as e:
+            print(f'Error: {e}')
+
+    def upload_picture(self, image):
+        self.factor = 1.0
+        try:
+            self.img = image
+            self.my_image = customtkinter.CTkImage(light_image=self.img, size=(self.img.width, self.img.height))
+            self.picture_mat.configure(image=self.my_image)
+            self.picture_mat.focus_set()
+            self.segment_btn.configure(state='normal')
+
+        except Exception as e:
+            print(f'Error: {e}')
 
         
 if __name__ == '__main__':
