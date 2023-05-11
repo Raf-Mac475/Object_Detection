@@ -141,7 +141,7 @@ class App(customtkinter.CTk):
 
     def do_segmentation(self):
         self.my_image = customtkinter.CTkImage(light_image=self.segmenter.segment(self.my_image._light_image),
-                                               size=(500, 500))
+                                               size=(self.img.width, self.img.height))
         self.picture_mat.configure(image=self.my_image)
 
         self.unlock_segment_btn()
