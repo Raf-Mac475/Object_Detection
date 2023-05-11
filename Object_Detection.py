@@ -121,7 +121,7 @@ class App(customtkinter.CTk):
 
     def upload_picture_btn_event(self):
         print("upload_button click")
-        self.upload_picture()
+        self.upload_picture_from_disk()
 
     def take_picture_btn_event(self):
         print("picture_button click")
