@@ -205,17 +205,12 @@ class App(customtkinter.CTk):
         self.picture_mat.configure(image=show_image)
         self.picture_mat.focus_set()
 
-    def upload_picture(self):
-        self.factor = 1.0
+    def upload_picture_from_disk(self):
         try:
             filename = filedialog.askopenfilename(initialdir='/Pictures', title='Select a File', filetypes=(('All Files', '*.*'),
             ('jpeg files', '*.jpeg'), ('png files', '*.png') ))
-            self.img = Image.open(filename)
-            self.my_image = customtkinter.CTkImage(light_image=self.img, size=(self.img.width, self.img.height))
-            self.picture_mat.configure(image=self.my_image)
-            self.picture_mat.focus_set()
-            
-            self.segment_btn.configure(state='normal')
+            img = Image.open(filename)
+            self.upload_picture(img)
 
         except Exception as e:
             print(f'Error: {e}')
