@@ -57,6 +57,9 @@ cover/
 # Models
 ml_models/
 
+#Results
+Results/
+
 # Translations
 *.mo
 *.pot
