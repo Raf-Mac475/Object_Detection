@@ -3,6 +3,7 @@ import cv2
 from PIL import Image
 from threading import Thread
 from tkinter import filedialog
+from datetime import datetime
 
 from generic_segmenter import *
 
@@ -140,12 +141,19 @@ class App(customtkinter.CTk):
         self.segment_btn.configure(state="normal")
 
     def do_segmentation(self):
-        self.my_image = customtkinter.CTkImage(light_image=self.segmenter.segment(self.my_image._light_image),
+        segmented_image= self.segmenter.segment(self.my_image._light_image)
+        self.my_image = customtkinter.CTkImage(light_image=segmented_image,
                                                size=(self.img.width, self.img.height))
         self.picture_mat.configure(image=self.my_image)
 
         self.unlock_segment_btn()
+        self.save_result(segmented_image)
         print('Ended')
+
+    def save_result(self, image):
+        now = datetime.now()  # current date and time
+        date_time = str(now.strftime("Result_%m%d%Y%H%M%S"))
+        image.save('Results/{0}.png'.format(date_time), "PNG")
 
     def segment_magic(self):
         print('segment_magic click')
