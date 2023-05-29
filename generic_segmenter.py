@@ -186,6 +186,9 @@ def get_segmenter(segmenter_name: str, model_path: str) -> generic_segmenter:
     elif segmenter_name == 'YoloV7':
         print('YoloV7')
         return YoloV7_segmenter(r'./ml_models/YoloV7.pt')
+    elif segmenter_name == 'droniada':
+        print('YoloV7')
+        return YoloV7_segmenter(model_path)
     elif segmenter_name == 'DeepLabV3':
         if os.path.isfile(model_path) and model_path.split('.')[-1] in ['pt', 'pth']:
             return DeepLabV3_segmenter(model_path)

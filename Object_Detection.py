@@ -64,7 +64,7 @@ class App(customtkinter.CTk):
 
         #Model choosing option menu
         self.model_optionmenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
-                                                                       values=['DeepLabV3', 'YoloV7'],
+                                                                       values=['DUMMY_SEGMENTER','DeepLabV3', 'YoloV7','droniada'],
                                                                        command=self.change_model_event)
         self.model_optionmenu.grid(row=self.iterator.next(), column=0, padx=20, pady=(10, 10))
         print(self.model_optionmenu.get())
@@ -109,10 +109,14 @@ class App(customtkinter.CTk):
 
     def change_model_event(self, new_model):
         print(new_model)
-        if new_model == 'DeepLabV3':
+        if new_model == 'DUMMY_SEGMENTER':
+            self.segmenter = get_segmenter(new_model, './DUMMY_SEGMENTER.pt')
+        elif new_model == 'DeepLabV3':
             self.segmenter = get_segmenter(new_model, './ml_models/DeepLabV3.pt')
         elif new_model == 'YoloV7':
             self.segmenter = get_segmenter(new_model, './ml_models/YoloV7.pt')
+        elif new_model == 'droniada':
+            self.segmenter = get_segmenter(new_model, './ml_models/droniada_rurociag.pt')
         else:
             raise RuntimeError('How the quack did you do that???')
 
