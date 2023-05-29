@@ -1,3 +1,4 @@
+import argparse
 import logging
 import sys
 from copy import deepcopy
@@ -6,8 +7,12 @@ sys.path.append('./')  # to run '$ python *.py' files in subdirectories
 logger = logging.getLogger(__name__)
 import torch
 from models.common import *
+from models.experimental import *
 from utils.autoanchor import check_anchor_order
-from utils.torch_utils import time_synchronized, fuse_conv_and_bn, model_info, scale_img, initialize_weights, copy_attr
+from utils.general import make_divisible, check_file, set_logging
+from utils.torch_utils import time_synchronized, fuse_conv_and_bn, model_info, scale_img, initialize_weights, \
+    select_device, copy_attr
+from utils.loss import SigmoidBin
 
 try:
     import thop  # for FLOPS computation
@@ -202,6 +207,107 @@ class IDetect(nn.Module):
         return (box, score)
 
 
+class IKeypoint(nn.Module):
+    stride = None  # strides computed during build
+    export = False  # onnx export
+
+    def __init__(self, nc=80, anchors=(), nkpt=17, ch=(), inplace=True, dw_conv_kpt=False):  # detection layer
+        super(IKeypoint, self).__init__()
+        self.nc = nc  # number of classes
+        self.nkpt = nkpt
+        self.dw_conv_kpt = dw_conv_kpt
+        self.no_det=(nc + 5)  # number of outputs per anchor for box and class
+        self.no_kpt = 3*self.nkpt ## number of outputs per anchor for keypoints
+        self.no = self.no_det+self.no_kpt
+        self.nl = len(anchors)  # number of detection layers
+        self.na = len(anchors[0]) // 2  # number of anchors
+        self.grid = [torch.zeros(1)] * self.nl  # init grid
+        self.flip_test = False
+        a = torch.tensor(anchors).float().view(self.nl, -1, 2)
+        self.register_buffer('anchors', a)  # shape(nl,na,2)
+        self.register_buffer('anchor_grid', a.clone().view(self.nl, 1, -1, 1, 1, 2))  # shape(nl,1,na,1,1,2)
+        self.m = nn.ModuleList(nn.Conv2d(x, self.no_det * self.na, 1) for x in ch)  # output conv
+        
+        self.ia = nn.ModuleList(ImplicitA(x) for x in ch)
+        self.im = nn.ModuleList(ImplicitM(self.no_det * self.na) for _ in ch)
+        
+        if self.nkpt is not None:
+            if self.dw_conv_kpt: #keypoint head is slightly more complex
+                self.m_kpt = nn.ModuleList(
+                            nn.Sequential(DWConv(x, x, k=3), Conv(x,x),
+                                          DWConv(x, x, k=3), Conv(x, x),
+                                          DWConv(x, x, k=3), Conv(x,x),
+                                          DWConv(x, x, k=3), Conv(x, x),
+                                          DWConv(x, x, k=3), Conv(x, x),
+                                          DWConv(x, x, k=3), nn.Conv2d(x, self.no_kpt * self.na, 1)) for x in ch)
+            else: #keypoint head is a single convolution
+                self.m_kpt = nn.ModuleList(nn.Conv2d(x, self.no_kpt * self.na, 1) for x in ch)
+
+        self.inplace = inplace  # use in-place ops (e.g. slice assignment)
+
+    def forward(self, x):
+        # x = x.copy()  # for profiling
+        z = []  # inference output
+        self.training |= self.export
+        for i in range(self.nl):
+            if self.nkpt is None or self.nkpt==0:
+                x[i] = self.im[i](self.m[i](self.ia[i](x[i])))  # conv
+            else :
+                x[i] = torch.cat((self.im[i](self.m[i](self.ia[i](x[i]))), self.m_kpt[i](x[i])), axis=1)
+
+            bs, _, ny, nx = x[i].shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
+            x[i] = x[i].view(bs, self.na, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
+            x_det = x[i][..., :6]
+            x_kpt = x[i][..., 6:]
+
+            if not self.training:  # inference
+                if self.grid[i].shape[2:4] != x[i].shape[2:4]:
+                    self.grid[i] = self._make_grid(nx, ny).to(x[i].device)
+                kpt_grid_x = self.grid[i][..., 0:1]
+                kpt_grid_y = self.grid[i][..., 1:2]
+
+                if self.nkpt == 0:
+                    y = x[i].sigmoid()
+                else:
+                    y = x_det.sigmoid()
+
+                if self.inplace:
+                    xy = (y[..., 0:2] * 2. - 0.5 + self.grid[i]) * self.stride[i]  # xy
+                    wh = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i].view(1, self.na, 1, 1, 2) # wh
+                    if self.nkpt != 0:
+                        x_kpt[..., 0::3] = (x_kpt[..., ::3] * 2. - 0.5 + kpt_grid_x.repeat(1,1,1,1,17)) * self.stride[i]  # xy
+                        x_kpt[..., 1::3] = (x_kpt[..., 1::3] * 2. - 0.5 + kpt_grid_y.repeat(1,1,1,1,17)) * self.stride[i]  # xy
+                        #x_kpt[..., 0::3] = (x_kpt[..., ::3] + kpt_grid_x.repeat(1,1,1,1,17)) * self.stride[i]  # xy
+                        #x_kpt[..., 1::3] = (x_kpt[..., 1::3] + kpt_grid_y.repeat(1,1,1,1,17)) * self.stride[i]  # xy
+                        #print('=============')
+                        #print(self.anchor_grid[i].shape)
+                        #print(self.anchor_grid[i][...,0].unsqueeze(4).shape)
+                        #print(x_kpt[..., 0::3].shape)
+                        #x_kpt[..., 0::3] = ((x_kpt[..., 0::3].tanh() * 2.) ** 3 * self.anchor_grid[i][...,0].unsqueeze(4).repeat(1,1,1,1,self.nkpt)) + kpt_grid_x.repeat(1,1,1,1,17) * self.stride[i]  # xy
+                        #x_kpt[..., 1::3] = ((x_kpt[..., 1::3].tanh() * 2.) ** 3 * self.anchor_grid[i][...,1].unsqueeze(4).repeat(1,1,1,1,self.nkpt)) + kpt_grid_y.repeat(1,1,1,1,17) * self.stride[i]  # xy
+                        #x_kpt[..., 0::3] = (((x_kpt[..., 0::3].sigmoid() * 4.) ** 2 - 8.) * self.anchor_grid[i][...,0].unsqueeze(4).repeat(1,1,1,1,self.nkpt)) + kpt_grid_x.repeat(1,1,1,1,17) * self.stride[i]  # xy
+                        #x_kpt[..., 1::3] = (((x_kpt[..., 1::3].sigmoid() * 4.) ** 2 - 8.) * self.anchor_grid[i][...,1].unsqueeze(4).repeat(1,1,1,1,self.nkpt)) + kpt_grid_y.repeat(1,1,1,1,17) * self.stride[i]  # xy
+                        x_kpt[..., 2::3] = x_kpt[..., 2::3].sigmoid()
+
+                    y = torch.cat((xy, wh, y[..., 4:], x_kpt), dim = -1)
+
+                else:  # for YOLOv5 on AWS Inferentia https://github.com/ultralytics/yolov5/pull/2953
+                    xy = (y[..., 0:2] * 2. - 0.5 + self.grid[i]) * self.stride[i]  # xy
+                    wh = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i]  # wh
+                    if self.nkpt != 0:
+                        y[..., 6:] = (y[..., 6:] * 2. - 0.5 + self.grid[i].repeat((1,1,1,1,self.nkpt))) * self.stride[i]  # xy
+                    y = torch.cat((xy, wh, y[..., 4:]), -1)
+
+                z.append(y.view(bs, -1, self.no))
+
+        return x if self.training else (torch.cat(z, 1), x)
+
+    @staticmethod
+    def _make_grid(nx=20, ny=20):
+        yv, xv = torch.meshgrid([torch.arange(ny), torch.arange(nx)])
+        return torch.stack((xv, yv), 2).view((1, 1, ny, nx, 2)).float()
+
+
 class IAuxDetect(nn.Module):
     stride = None  # strides computed during build
     export = False  # onnx export
@@ -322,6 +428,81 @@ class IAuxDetect(nn.Module):
                                            device=z.device)
         box @= convert_matrix                          
         return (box, score)
+
+
+class IBin(nn.Module):
+    stride = None  # strides computed during build
+    export = False  # onnx export
+
+    def __init__(self, nc=80, anchors=(), ch=(), bin_count=21):  # detection layer
+        super(IBin, self).__init__()
+        self.nc = nc  # number of classes
+        self.bin_count = bin_count
+
+        self.w_bin_sigmoid = SigmoidBin(bin_count=self.bin_count, min=0.0, max=4.0)
+        self.h_bin_sigmoid = SigmoidBin(bin_count=self.bin_count, min=0.0, max=4.0)
+        # classes, x,y,obj
+        self.no = nc + 3 + \
+            self.w_bin_sigmoid.get_length() + self.h_bin_sigmoid.get_length()   # w-bce, h-bce
+            # + self.x_bin_sigmoid.get_length() + self.y_bin_sigmoid.get_length()
+        
+        self.nl = len(anchors)  # number of detection layers
+        self.na = len(anchors[0]) // 2  # number of anchors
+        self.grid = [torch.zeros(1)] * self.nl  # init grid
+        a = torch.tensor(anchors).float().view(self.nl, -1, 2)
+        self.register_buffer('anchors', a)  # shape(nl,na,2)
+        self.register_buffer('anchor_grid', a.clone().view(self.nl, 1, -1, 1, 1, 2))  # shape(nl,1,na,1,1,2)
+        self.m = nn.ModuleList(nn.Conv2d(x, self.no * self.na, 1) for x in ch)  # output conv
+        
+        self.ia = nn.ModuleList(ImplicitA(x) for x in ch)
+        self.im = nn.ModuleList(ImplicitM(self.no * self.na) for _ in ch)
+
+    def forward(self, x):
+
+        #self.x_bin_sigmoid.use_fw_regression = True
+        #self.y_bin_sigmoid.use_fw_regression = True
+        self.w_bin_sigmoid.use_fw_regression = True
+        self.h_bin_sigmoid.use_fw_regression = True
+        
+        # x = x.copy()  # for profiling
+        z = []  # inference output
+        self.training |= self.export
+        for i in range(self.nl):
+            x[i] = self.m[i](self.ia[i](x[i]))  # conv
+            x[i] = self.im[i](x[i])
+            bs, _, ny, nx = x[i].shape  # x(bs,255,20,20) to x(bs,3,20,20,85)
+            x[i] = x[i].view(bs, self.na, self.no, ny, nx).permute(0, 1, 3, 4, 2).contiguous()
+
+            if not self.training:  # inference
+                if self.grid[i].shape[2:4] != x[i].shape[2:4]:
+                    self.grid[i] = self._make_grid(nx, ny).to(x[i].device)
+
+                y = x[i].sigmoid()
+                y[..., 0:2] = (y[..., 0:2] * 2. - 0.5 + self.grid[i]) * self.stride[i]  # xy
+                #y[..., 2:4] = (y[..., 2:4] * 2) ** 2 * self.anchor_grid[i]  # wh
+                
+
+                #px = (self.x_bin_sigmoid.forward(y[..., 0:12]) + self.grid[i][..., 0]) * self.stride[i]
+                #py = (self.y_bin_sigmoid.forward(y[..., 12:24]) + self.grid[i][..., 1]) * self.stride[i]
+
+                pw = self.w_bin_sigmoid.forward(y[..., 2:24]) * self.anchor_grid[i][..., 0]
+                ph = self.h_bin_sigmoid.forward(y[..., 24:46]) * self.anchor_grid[i][..., 1]
+
+                #y[..., 0] = px
+                #y[..., 1] = py
+                y[..., 2] = pw
+                y[..., 3] = ph
+                
+                y = torch.cat((y[..., 0:4], y[..., 46:]), dim=-1)
+                
+                z.append(y.view(bs, -1, y.shape[-1]))
+
+        return x if self.training else (torch.cat(z, 1), x)
+
+    @staticmethod
+    def _make_grid(nx=20, ny=20):
+        yv, xv = torch.meshgrid([torch.arange(ny), torch.arange(nx)])
+        return torch.stack((xv, yv), 2).view((1, 1, ny, nx, 2)).float()
 
 
 class Model(nn.Module):
@@ -550,3 +731,113 @@ class Model(nn.Module):
 
     def info(self, verbose=False, img_size=640):  # print model information
         model_info(self, verbose, img_size)
+
+
+def parse_model(d, ch):  # model_dict, input_channels(3)
+    logger.info('\n%3s%18s%3s%10s  %-40s%-30s' % ('', 'from', 'n', 'params', 'module', 'arguments'))
+    anchors, nc, gd, gw = d['anchors'], d['nc'], d['depth_multiple'], d['width_multiple']
+    na = (len(anchors[0]) // 2) if isinstance(anchors, list) else anchors  # number of anchors
+    no = na * (nc + 5)  # number of outputs = anchors * (classes + 5)
+
+    layers, save, c2 = [], [], ch[-1]  # layers, savelist, ch out
+    for i, (f, n, m, args) in enumerate(d['backbone'] + d['head']):  # from, number, module, args
+        m = eval(m) if isinstance(m, str) else m  # eval strings
+        for j, a in enumerate(args):
+            try:
+                args[j] = eval(a) if isinstance(a, str) else a  # eval strings
+            except:
+                pass
+
+        n = max(round(n * gd), 1) if n > 1 else n  # depth gain
+        if m in [nn.Conv2d, Conv, RobustConv, RobustConv2, DWConv, GhostConv, RepConv, RepConv_OREPA, DownC, 
+                 SPP, SPPF, SPPCSPC, GhostSPPCSPC, MixConv2d, Focus, Stem, GhostStem, CrossConv, 
+                 Bottleneck, BottleneckCSPA, BottleneckCSPB, BottleneckCSPC, 
+                 RepBottleneck, RepBottleneckCSPA, RepBottleneckCSPB, RepBottleneckCSPC,  
+                 Res, ResCSPA, ResCSPB, ResCSPC, 
+                 RepRes, RepResCSPA, RepResCSPB, RepResCSPC, 
+                 ResX, ResXCSPA, ResXCSPB, ResXCSPC, 
+                 RepResX, RepResXCSPA, RepResXCSPB, RepResXCSPC, 
+                 Ghost, GhostCSPA, GhostCSPB, GhostCSPC,
+                 SwinTransformerBlock, STCSPA, STCSPB, STCSPC,
+                 SwinTransformer2Block, ST2CSPA, ST2CSPB, ST2CSPC]:
+            c1, c2 = ch[f], args[0]
+            if c2 != no:  # if not output
+                c2 = make_divisible(c2 * gw, 8)
+
+            args = [c1, c2, *args[1:]]
+            if m in [DownC, SPPCSPC, GhostSPPCSPC, 
+                     BottleneckCSPA, BottleneckCSPB, BottleneckCSPC, 
+                     RepBottleneckCSPA, RepBottleneckCSPB, RepBottleneckCSPC, 
+                     ResCSPA, ResCSPB, ResCSPC, 
+                     RepResCSPA, RepResCSPB, RepResCSPC, 
+                     ResXCSPA, ResXCSPB, ResXCSPC, 
+                     RepResXCSPA, RepResXCSPB, RepResXCSPC,
+                     GhostCSPA, GhostCSPB, GhostCSPC,
+                     STCSPA, STCSPB, STCSPC,
+                     ST2CSPA, ST2CSPB, ST2CSPC]:
+                args.insert(2, n)  # number of repeats
+                n = 1
+        elif m is nn.BatchNorm2d:
+            args = [ch[f]]
+        elif m is Concat:
+            c2 = sum([ch[x] for x in f])
+        elif m is Chuncat:
+            c2 = sum([ch[x] for x in f])
+        elif m is Shortcut:
+            c2 = ch[f[0]]
+        elif m is Foldcut:
+            c2 = ch[f] // 2
+        elif m in [Detect, IDetect, IAuxDetect, IBin, IKeypoint]:
+            args.append([ch[x] for x in f])
+            if isinstance(args[1], int):  # number of anchors
+                args[1] = [list(range(args[1] * 2))] * len(f)
+        elif m is ReOrg:
+            c2 = ch[f] * 4
+        elif m is Contract:
+            c2 = ch[f] * args[0] ** 2
+        elif m is Expand:
+            c2 = ch[f] // args[0] ** 2
+        else:
+            c2 = ch[f]
+
+        m_ = nn.Sequential(*[m(*args) for _ in range(n)]) if n > 1 else m(*args)  # module
+        t = str(m)[8:-2].replace('__main__.', '')  # module type
+        np = sum([x.numel() for x in m_.parameters()])  # number params
+        m_.i, m_.f, m_.type, m_.np = i, f, t, np  # attach index, 'from' index, type, number params
+        logger.info('%3s%18s%3s%10.0f  %-40s%-30s' % (i, f, n, np, t, args))  # print
+        save.extend(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)  # append to savelist
+        layers.append(m_)
+        if i == 0:
+            ch = []
+        ch.append(c2)
+    return nn.Sequential(*layers), sorted(save)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--cfg', type=str, default='yolor-csp-c.yaml', help='model.yaml')
+    parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--profile', action='store_true', help='profile model speed')
+    opt = parser.parse_args()
+    opt.cfg = check_file(opt.cfg)  # check file
+    set_logging()
+    device = select_device(opt.device)
+
+    # Create model
+    model = Model(opt.cfg).to(device)
+    model.train()
+    
+    if opt.profile:
+        img = torch.rand(1, 3, 640, 640).to(device)
+        y = model(img, profile=True)
+
+    # Profile
+    # img = torch.rand(8 if torch.cuda.is_available() else 1, 3, 640, 640).to(device)
+    # y = model(img, profile=True)
+
+    # Tensorboard
+    # from torch.utils.tensorboard import SummaryWriter
+    # tb_writer = SummaryWriter()
+    # print("Run 'tensorboard --logdir=models/runs' to view tensorboard at http://localhost:6006/")
+    # tb_writer.add_graph(model.model, img)  # add model to tensorboard
+    # tb_writer.add_image('test', img[0], dataformats='CWH')  # add model to tensorboard
