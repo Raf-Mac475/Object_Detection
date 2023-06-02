@@ -16,7 +16,7 @@ python3.11 -m venv objectDetectionEnv
 
 pip install -r requirements.txt
 ```
-## How to install on Linux
+# How to install on Linux
 Create venv:
 ```bash
 python3.11 -m venv objectDetectionEnv
@@ -24,7 +24,15 @@ source ./objectDetectionEnv/bin/activate
 
 pip install -r requirements.txt
 ```
-### How to run:
+# How to run DRONIADA-RUROCIĄG
+```bash
+python ./detect_rurociag.py image_path output_dir_path
+```
+# How to run DRONIADA-INTRUZ
+```bash
+python ./detect_intruz.py image_path output_dir_path
+```
+# How to run GUI app (beta - not for DRONIADA, but you can use it too):
 ```bash
 python ./Object_Detection.py
 ```

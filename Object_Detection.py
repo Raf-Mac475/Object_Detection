@@ -64,10 +64,10 @@ class App(customtkinter.CTk):
 
         #Model choosing option menu
         self.model_optionmenu = customtkinter.CTkOptionMenu(self.sidebar_frame,
-                                                                       values=['DUMMY_SEGMENTER','DeepLabV3', 'YoloV7','droniada'],
+                                                                       values=['DUMMY_SEGMENTER','DeepLabV3', 'YoloV7','droniada_rur','droniada_intr'],
                                                                        command=self.change_model_event)
         self.model_optionmenu.grid(row=self.iterator.next(), column=0, padx=20, pady=(10, 10))
-        print(self.model_optionmenu.get())
+        # print(self.model_optionmenu.get())
         self.segmenter = get_segmenter(self.model_optionmenu.get(), './ml_models/DeepLabV3.pt')
 
         #Segment Button
@@ -108,15 +108,17 @@ class App(customtkinter.CTk):
         customtkinter.set_appearance_mode(new_appearance_mode)
 
     def change_model_event(self, new_model):
-        print(new_model)
+        # print(new_model)
         if new_model == 'DUMMY_SEGMENTER':
             self.segmenter = get_segmenter(new_model, './DUMMY_SEGMENTER.pt')
         elif new_model == 'DeepLabV3':
             self.segmenter = get_segmenter(new_model, './ml_models/DeepLabV3.pt')
         elif new_model == 'YoloV7':
             self.segmenter = get_segmenter(new_model, './ml_models/YoloV7.pt')
-        elif new_model == 'droniada':
+        elif new_model == 'droniada_rur':
             self.segmenter = get_segmenter(new_model, './ml_models/droniada_rurociag.pt')
+        elif new_model == 'droniada_intr':
+            self.segmenter = get_segmenter(new_model, './ml_models/droniada_intruz.pt')
         else:
             raise RuntimeError('How the quack did you do that???')
 
@@ -125,16 +127,16 @@ class App(customtkinter.CTk):
         customtkinter.set_widget_scaling(new_scaling_float)
 
     def upload_picture_btn_event(self):
-        print("upload_button click")
+        # print("upload_button click")
         self.upload_picture_from_disk()
 
     def take_picture_btn_event(self):
-        print("picture_button click")
+        # print("picture_button click")
         self.Camera_photo()
 
 
     def camera_btn_event(self):
-        print('camera_button click')
+        # print('camera_button click')
         self.Camera_capture()
     
     # TODO(jakubg): remember to block all functionalities that shouldn't be changed during segmentation.
@@ -152,7 +154,7 @@ class App(customtkinter.CTk):
 
         self.unlock_segment_btn()
         self.save_result(segmented_image)
-        print('Ended')
+        # print('Ended')
 
     def save_result(self, image):
         now = datetime.now()  # current date and time
@@ -160,10 +162,10 @@ class App(customtkinter.CTk):
         image.save('Results/{0}.png'.format(date_time), "PNG")
 
     def segment_magic(self):
-        print('segment_magic click')
+        # print('segment_magic click')
         if self.segment_btn._state != 'disabled':
             self.block_segment_btn()
-            print('Started')
+            # print('Started')
             thread = Thread(target=self.do_segmentation)
             thread.start()
 
