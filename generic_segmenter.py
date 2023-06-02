@@ -7,6 +7,7 @@ from PIL import Image
 import cv2
 import numpy as np
 import torch
+from torch.utils.mobile_optimizer import optimize_for_mobile
 from torchvision import transforms
 
 from yolov7_utils import LoadImages, attempt_load, check_img_size, non_max_suppression, plot_one_box, scale_coords, select_device, time_synchronized
@@ -58,7 +59,7 @@ class YoloV7_segmenter(generic_segmenter):
     """
     def __init__(self, path_to_model: str) -> None:
         """Method to read model from file"""
-        print(f'Reading model from {path_to_model}')
+        # print(f'Reading model from {path_to_model}')
         self.device = select_device('')
 
         self.model_path = path_to_model
@@ -72,11 +73,11 @@ class YoloV7_segmenter(generic_segmenter):
         
         self.names = self.model.module.names if hasattr(self.model, 'module') else self.model.names
         self.colors = [[random.randint(0, 255) for _ in range(3)] for _ in self.names]
-        # self.model.eval()
+        self.model.eval()
 
     def model_info(self) -> None:
         """Method to show info and metadata"""
-        print(f'Model: {self.model}')
+        # print(f'Model: {self.model}')
     
     def segment(self, image):
         """Method to do segmenting magic
@@ -127,10 +128,11 @@ class YoloV7_segmenter(generic_segmenter):
                     for *xyxy, conf, cls in reversed(det):
 
                         label = f'{self.names[int(cls)]} {conf:.2f}'
+                        print(label.split(' ')[0], xyxy[0].tolist(), xyxy[1].tolist(), xyxy[2].tolist(), xyxy[3].tolist())
                         plot_one_box(xyxy, im0, label=label, color=self.colors[int(cls)], line_thickness=1)
 
         # Print time (inference + NMS)
-        print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
+        # print(f'{s}Done. ({(1E3 * (t2 - t1)):.1f}ms) Inference, ({(1E3 * (t3 - t2)):.1f}ms) NMS')
 
         im0 = cv2.cvtColor(im0, cv2.COLOR_BGR2RGB)
         im_pil = Image.fromarray(im0)
@@ -179,15 +181,15 @@ def get_segmenter(segmenter_name: str, model_path: str) -> generic_segmenter:
     - YoloV7
     """
 
-    print(segmenter_name, model_path)
+    # print(segmenter_name, model_path)
 
     if segmenter_name == 'DUMMY_SEGMENTER':
         return dummy_segmenter(r'C:\system32\rule34.pt')
     elif segmenter_name == 'YoloV7':
-        print('YoloV7')
+        # print('YoloV7')
         return YoloV7_segmenter(r'./ml_models/YoloV7.pt')
-    elif segmenter_name == 'droniada':
-        print('YoloV7')
+    elif segmenter_name == 'droniada_intr' or segmenter_name == 'droniada_rur':
+        # print('YoloV7')
         return YoloV7_segmenter(model_path)
     elif segmenter_name == 'DeepLabV3':
         if os.path.isfile(model_path) and model_path.split('.')[-1] in ['pt', 'pth']:
@@ -196,3 +198,5 @@ def get_segmenter(segmenter_name: str, model_path: str) -> generic_segmenter:
             raise RuntimeError(f'Path {model_path} doesnt exist :/. Did you download models? Did you even read README.md bi$ch?')
     else:
         raise RuntimeError(f'Model {segmenter_name} is not supported.')
+
+
